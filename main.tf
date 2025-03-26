@@ -27,12 +27,12 @@ resource "random_string" "suffix" {
 }
 
 module "worker_pool" {
-  source = "github.com/spacelift-io/terraform-aws-spacelift-workerpool-on-ec2?ref=misc-improvements"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-workerpool-on-ec2?ref=v2.15.0"
 
-  configuration = <<-EOT
-    export SPACELIFT_TOKEN="${spacelift_worker_pool.aws.config}"
-    export SPACELIFT_POOL_PRIVATE_KEY="${base64encode(tls_private_key.main.private_key_pem)}"
-  EOT
+  secure_env_vars = {
+    SPACELIFT_TOKEN            = spacelift_worker_pool.aws.config
+    SPACELIFT_POOL_PRIVATE_KEY = base64encode(tls_private_key.main.private_key_pem)
+  }
 
   max_size        = 1
   min_size        = 1
