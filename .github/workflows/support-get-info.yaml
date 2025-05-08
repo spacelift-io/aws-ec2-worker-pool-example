@@ -1,66 +1,11 @@
 name: "Support: Get Info"
 
-# These support workflows are two-step processes for the sake of security:
-# https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
-# Step 1: Get Info, just gets info of the issue/pull-request
-# Step 2: Comment will actually comment on the pr.
-#         It runs in the secure boundary of our organization (so it has access to secrets).
-#
-# This workflow should be called like so:
-# name: "Support: Get Info"
-#
-# on:
-#   issues:
-#     types: [ opened ]
-#   pull_request:
-#     types: [opened]
-#
-# jobs:
-#   get-info:
-#     uses: spacelift-io/.github/.github/workflows/support-get-info.yaml@main
-
 on:
-  workflow_call:
+  issues:
+    types: [ opened ]
+  pull_request:
+    types: [opened]
 
 jobs:
   get-info:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Determine if comment is needed
-        id: check_comment
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            let shouldComment = false;
-            let isIssue = false;
-            
-            // For issues, always comment
-            if (context.payload.issue) {
-              shouldComment = true;
-              isIssue = true;
-            }
-            // For PRs, only comment if from a fork
-            else if (context.payload.pull_request) {
-              shouldComment = context.payload.pull_request.head.repo.fork === true;
-            }
-            
-            core.setOutput('is_issue', isIssue.toString());
-            core.setOutput('should_comment', shouldComment.toString());
-            core.setOutput('issue_number', context.issue.number);
-            core.setOutput('type', isIssue ? "issue" : "pull request");
-
-      - name: Set Artifacts For Comment Workflow
-        run: |
-          mkdir -p ./artifacts
-          echo "${{ steps.check_comment.outputs.issue_number }}" > ./artifacts/issue_number
-          echo "${{ steps.check_comment.outputs.is_issue }}" > ./artifacts/is_issue
-          echo "${{ steps.check_comment.outputs.should_comment }}" > ./artifacts/should_comment
-          echo "${{ steps.check_comment.outputs.type }}" > ./artifacts/type
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: artifacts
-          path: artifacts/
+    uses: spacelift-io/.github/.github/workflows/support-get-info.yaml@main
