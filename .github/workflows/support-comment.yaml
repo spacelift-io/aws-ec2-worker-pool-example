@@ -1,13 +1,12 @@
-name: External Contributor Comment Trigger
+name: "Support: Comment"
 
 on:
-  issues:
-    types: [opened]
-  pull_request:
-    types: [opened]
+  workflow_run:
+    workflows: ["Support: Get Info"]
+    types: [completed]
 
 jobs:
-  add-contact-comment:
+  comment:
     uses: spacelift-io/.github/.github/workflows/support-comment.yaml@main
     secrets:
       slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
