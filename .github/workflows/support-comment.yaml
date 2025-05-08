@@ -1,0 +1,113 @@
+name: "Support: Comment"
+
+# These support workflows are two-step processes for the sake of security:
+# https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+# Step 1: Get Info, just gets info of the issue/pull-request
+# Step 2: Comment will actually comment on the pr.
+#         It runs in the secure boundary of our organization (so it has access to secrets).
+#
+# This workflow should be called like so:
+# name: "Support: Comment"
+#
+# on:
+#   workflow_run:
+#     workflows: [ "Support: Get Info" ]
+#     types: [ completed ]
+#
+# jobs:
+#   comment:
+#     uses: spacelift-io/.github/.github/workflows/support-comment.yaml@main
+#     secrets:
+#       slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+on:
+  workflow_call:
+    secrets:
+      slack_webhook_url:
+        required: true
+        description: "Webhook URL to send slack messages for notifications of issues and pull requests."
+
+jobs:
+  add-comment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts From Secure Workflow
+        uses: actions/github-script@v6
+        with:
+          script: |
+            let artifacts = await github.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: ${{github.event.workflow_run.id }},
+            });
+            let matchArtifact = artifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "artifacts"
+            })[0];
+            let download = await github.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            let fs = require('fs');
+            fs.writeFileSync('${{github.workspace}}/artifacts.zip', Buffer.from(download.data));
+      - run: |
+          mkdir -p ./support-comment-workflow
+          unzip artifacts.zip -d ./support-comment-workflow
+
+      - name: Reset Outputs
+        id: check_comment
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            let isIssue = fs.readFileSync('./support-comment-workflow/is_issue');
+            let shouldComment = fs.readFileSync('./support-comment-workflow/should_comment');
+            let issueNumber = fs.readFileSync('./support-comment-workflow/issue_number');
+            let type = fs.readFileSync('./support-comment-workflow/type');
+            
+            core.setOutput('is_issue', isIssue);
+            core.setOutput('should_comment', shouldComment);
+            core.setOutput('issue_number', issueNumber);
+            core.setOutput('owner', context.repo.owner);
+            core.setOutput('repo', context.repo.repo);
+            core.setOutput('type', type);
+
+      - name: Add contact information comment
+        if: steps.check_comment.outputs.should_comment == 'true'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber = context.issue.number;
+            const repo = context.repo.repo;
+            const owner = context.repo.owner;
+            const isIssue = '${{ steps.check_comment.outputs.is_issue }}' === 'true'
+            
+            let documentationText = '';
+            if (isIssue) {
+              documentationText = '\nOur [documentation](https://docs.spacelift.io) may contain helpful information related to your issue\n';
+            }
+            
+            const body = `
+            # Thank you for your contribution!
+            
+            We've been notified of this ${isIssue ? 'issue' : 'pull request'} and will review it soon. We appreciate you helping to make Spacelift better!
+            ${documentationText}
+            **For Spacelift Customers:**
+            - For fastest response, please use your dedicated Slack or Microsoft Teams channel
+            - Or email us directly at \`support@spacelift.io\`
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: owner,
+              repo: repo,
+              issue_number: issueNumber,
+              body: body
+            });
+      - name: Send Slack Message
+        if: steps.check_comment.outputs.should_comment == 'true'
+        run: |
+          message="New ${{ steps.check_comment.outputs.type }} on <https://github.com/${{ steps.check_comment.outputs.owner }}/${{ steps.check_comment.outputs.repo }}/issues/${{ steps.check_comment.outputs.issue_number }}|${{ steps.check_comment.outputs.owner }}/${{ steps.check_comment.outputs.repo }}>."
+          curl -X POST -H 'Content-type: application/json' --data "{\"text\":\"$message\"}" ${{ secrets.slack_webhook_url }}
