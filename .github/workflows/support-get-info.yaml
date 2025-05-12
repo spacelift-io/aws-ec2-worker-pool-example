@@ -6,6 +6,9 @@ on:
   pull_request:
     types: [opened]
 
+permissions:
+  contents: read
+
 jobs:
   get-info:
     uses: spacelift-io/.github/.github/workflows/support-get-info.yaml@main
